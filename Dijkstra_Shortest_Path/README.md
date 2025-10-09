@@ -1,10 +1,10 @@
 # Farm-to-Market Route Optimization
 
-A comprehensive Python application implementing Dijkstra's Algorithm with an interactive Streamlit web interface and Folium map visualization for finding optimal routes from farms to markets.
+A comprehensive Python application implementing Dijkstra's Algorithm with an interactive Streamlit web interface, Folium map visualization, and robust data validation for finding optimal routes from farms to markets.
 
 ## Overview
 
-This project demonstrates practical applications of graph algorithms in logistics and transportation. It provides both a command-line interface and a modern web application for route optimization, featuring real-time interactive maps and comprehensive route analysis.
+This project demonstrates practical applications of graph algorithms in logistics and transportation. It provides both a command-line interface and a modern web application for route optimization, featuring real-time interactive maps, comprehensive route analysis, and professional-grade data validation.
 
 ### What is Dijkstra's Algorithm?
 
@@ -28,6 +28,7 @@ In our context:
 Dijkstra_Shortest_Path/
 ├── main.py                      # Command-line implementation
 ├── app.py                       # Streamlit web application
+├── validation.py                # Data validation module
 ├── sample_data.csv              # Sample network data
 ├── requirements.txt             # Python dependencies
 ├── README.md                    # This documentation
@@ -52,6 +53,111 @@ Dijkstra_Shortest_Path/
 - **Multiple Map Themes**: Choice of map visual styles
 - **Export Functionality**: Download route summaries as CSV files
 - **Responsive Design**: Works on desktop and mobile devices
+
+### Data Validation System (`validation.py`)
+- **CSV Structure Validation**: Ensures required columns and proper format
+- **Data Type Checking**: Validates numeric weights and coordinate ranges
+- **Geographic Validation**: Verifies latitude/longitude bounds when present
+- **Graph Consistency**: Checks connectivity and identifies isolated nodes
+- **User Input Safety**: Validates route selections and prevents invalid computations
+- **Real-time Feedback**: Streamlit integration with color-coded messages
+
+## Data Validation
+
+The application includes a comprehensive data validation system that ensures data quality and prevents errors before computation.
+
+### Validation Rules
+
+#### 🔍 **CSV Structure Validation**
+- **Required Columns**: `source`, `target`, `weight`
+- **Optional Columns**: `lat`, `lon` (coordinates) or `source_lat`, `source_lon`, `target_lat`, `target_lon`
+- **No Duplicate Columns**: Column names must be unique
+- **Non-Empty Data**: CSV must contain actual data rows
+
+#### 🔢 **Data Type Validation**
+- **Weights**: Must be positive numeric values (> 0)
+- **Coordinates**: Must be valid decimal numbers within geographic bounds
+  - **Latitude**: -90 to +90 degrees
+  - **Longitude**: -180 to +180 degrees
+- **Location Names**: Non-empty text strings without leading/trailing whitespace
+
+#### 🌐 **Graph Consistency Checks**
+- **Self-loops**: Routes from a location to itself are detected and ignored
+- **Connectivity**: Warns if graph has disconnected components
+- **Isolated Nodes**: Identifies nodes with no connections
+- **Component Analysis**: Reports the number and size of connected components
+
+#### 🎯 **User Input Validation**
+- **Node Existence**: Selected start/destination must exist in the dataset
+- **Route Possibility**: Validates that a path exists between selected locations
+- **Input Differences**: Prevents identical start and destination selections
+
+### Validation Feedback
+
+The system provides real-time feedback using color-coded Streamlit messages:
+
+- **✅ Success Messages (Green)**: Validation passed, ready to proceed
+- **⚠️ Warning Messages (Yellow)**: Non-critical issues that don't block computation
+- **❌ Error Messages (Red)**: Critical issues that prevent route calculation
+- **ℹ️ Info Messages (Blue)**: Helpful guidance and tips
+
+### Common Validation Issues & Solutions
+
+#### ❌ **Missing Required Columns**
+- **Issue**: CSV doesn't have `source`, `target`, or `weight` columns
+- **Solution**: Ensure your CSV includes all three required columns with exact names
+
+#### ❌ **Non-Positive Weights**
+- **Issue**: Weight values are zero, negative, or non-numeric
+- **Solution**: All distance values must be positive numbers greater than 0
+
+#### ❌ **Invalid Coordinates**
+- **Issue**: Latitude/longitude values are outside valid ranges
+- **Solution**: Check coordinate bounds (lat: -90 to 90, lon: -180 to 180)
+
+#### ⚠️ **Disconnected Graph**
+- **Issue**: Some locations are not reachable from others
+- **Solution**: Add connecting routes to ensure network connectivity
+
+#### ❌ **Node Not Found**
+- **Issue**: Selected start/destination doesn't exist in the dataset
+- **Solution**: Choose locations from the provided dropdown menus
+
+### Sample Valid Data Formats
+
+#### **Basic Format (Required Columns Only)**
+```csv
+source,target,weight
+Farm_A,Village_X,5.2
+Farm_A,Village_Y,8.1
+Village_X,Market_1,2.4
+Village_Y,Market_1,4.9
+```
+
+#### **Extended Format (With Coordinates)**
+```csv
+source,target,weight,lat,lon
+Farm_A,Village_X,5.2,40.7128,-74.0060
+Farm_A,Village_Y,8.1,40.7200,-74.0100
+Village_X,Market_1,2.4,40.7300,-74.0150
+Village_Y,Market_1,4.9,40.7180,-74.0080
+```
+
+#### **Separate Coordinates Format**
+```csv
+source,target,weight,source_lat,source_lon,target_lat,target_lon
+Farm_A,Village_X,5.2,40.7128,-74.0060,40.7200,-74.0100
+Village_X,Market_1,2.4,40.7200,-74.0100,40.7300,-74.0150
+```
+
+### Data Summary Features
+
+After successful validation, the system displays:
+
+- **📊 Data Summary**: Total edges, unique nodes, distance statistics
+- **🔗 Network Metrics**: Connectivity status and component analysis
+- **⚠️ Warning Review**: Non-critical issues that were detected
+- **📋 Validation Report**: Comprehensive validation results
 
 ## Installation
 
