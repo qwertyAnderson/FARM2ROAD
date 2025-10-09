@@ -1,10 +1,10 @@
 # Farm-to-Market Route Optimization
 
-A Python implementation of Dijkstra's Algorithm using NetworkX to find the shortest path from a farm to a market through a network of villages and roads.
+A comprehensive Python application implementing Dijkstra's Algorithm with an interactive Streamlit web interface and Folium map visualization for finding optimal routes from farms to markets.
 
 ## Overview
 
-This project demonstrates how Dijkstra's Algorithm can be applied to real-world logistics problems, specifically optimizing routes for agricultural transportation. The algorithm finds the most efficient path from a farm to a market, considering road distances and intermediate villages.
+This project demonstrates practical applications of graph algorithms in logistics and transportation. It provides both a command-line interface and a modern web application for route optimization, featuring real-time interactive maps and comprehensive route analysis.
 
 ### What is Dijkstra's Algorithm?
 
@@ -26,19 +26,32 @@ In our context:
 
 ```
 Dijkstra_Shortest_Path/
-├── main.py           # Main implementation script
-├── sample_data.csv   # Sample network data
-├── requirements.txt  # Python dependencies
-└── README.md        # This documentation
+├── main.py                      # Command-line implementation
+├── app.py                       # Streamlit web application
+├── sample_data.csv              # Sample network data
+├── requirements.txt             # Python dependencies
+├── README.md                    # This documentation
+└── dijkstra_shortest_path.png   # Generated visualization
 ```
 
 ## Features
 
+### Command-Line Application (`main.py`)
 - **Graph Loading**: Reads network data from CSV files
 - **Shortest Path Calculation**: Uses NetworkX's Dijkstra implementation
-- **Visualization**: Creates interactive plots showing the network and optimal route
+- **Static Visualization**: Creates matplotlib plots showing the network and optimal route
 - **Comprehensive Analysis**: Provides graph statistics and alternative route information
 - **Error Handling**: Robust error handling for missing files or invalid data
+
+### Web Application (`app.py`)
+- **Interactive UI**: Modern Streamlit interface with sidebar controls
+- **File Upload**: Support for custom CSV data upload
+- **Real-time Calculation**: Live route optimization with progress indicators
+- **Interactive Maps**: Folium-powered maps with clickable markers and route highlighting
+- **ETA Calculation**: Travel time estimation with configurable speed settings
+- **Multiple Map Themes**: Choice of map visual styles
+- **Export Functionality**: Download route summaries as CSV files
+- **Responsive Design**: Works on desktop and mobile devices
 
 ## Installation
 
@@ -51,59 +64,37 @@ Dijkstra_Shortest_Path/
 
 3. **Verify installation** by checking if packages are installed:
    ```bash
-   python -c "import networkx, matplotlib, pandas; print('All packages installed successfully!')"
+   python -c "import streamlit, networkx, folium; print('All packages installed successfully!')"
    ```
 
 ## Usage
 
-### Basic Usage
+### Web Application (Recommended)
 
-Run the main script:
+**Start the Streamlit app:**
+```bash
+streamlit run app.py
+```
+
+**Features:**
+- 🗺️ **Interactive route planning** with dropdown menus
+- 📁 **File upload** for custom network data
+- 🎨 **Multiple map themes** (OpenStreetMap, Terrain, etc.)
+- ⚡ **Real-time ETA calculation** with adjustable speed
+- 📊 **Detailed route analysis** with step-by-step directions
+- 💾 **Export capabilities** for route data
+
+### Command-Line Application
+
+**Run the traditional script:**
 ```bash
 python main.py
 ```
 
-### Expected Output
-
-The script will:
-1. Load the network from `sample_data.csv`
-2. Analyze the graph structure
-3. Calculate the shortest path from Farm to Market
-4. Display detailed results
-5. Generate a visualization plot
-6. Save the plot as `dijkstra_shortest_path.png`
-
-### Sample Output
-
-```
-Farm-to-Market Route Optimization using Dijkstra's Algorithm
-=================================================================
-Loaded 13 edges from sample_data.csv
-Graph created with 7 nodes and 13 edges
-
-GRAPH ANALYSIS
-------------------------------
-Number of locations (nodes): 7
-Number of routes (edges): 13
-Graph is connected: True
-Locations: Farm, Market, VillageA, VillageB, VillageC, VillageD, VillageE, VillageF
-
-============================================================
-DIJKSTRA'S ALGORITHM RESULTS
-============================================================
-Start Location: Farm
-End Location: Market
-Shortest Path: Farm → VillageB → VillageC → VillageF → Market
-Total Distance: 6.0 km
-Number of Stops: 3
-
-Detailed Route:
-  Step 1: Farm → VillageB
-  Step 2: VillageB → VillageC
-  Step 3: VillageC → VillageF
-  Step 4: VillageF → Market
-============================================================
-```
+**Features:**
+- 📈 **Static visualization** saved as PNG
+- 📋 **Comprehensive text output** with route details
+- 🔍 **Network analysis** and connectivity information
 
 ## Data Format
 
@@ -123,38 +114,72 @@ VillageB,VillageC,1
 VillageC,Market,6
 ```
 
+## Web Application Guide
+
+### 1. Getting Started
+1. Launch the app with `streamlit run app.py`
+2. Open your browser to the displayed URL (usually `http://localhost:8501`)
+3. Use the sidebar to configure your route
+
+### 2. Data Sources
+- **Default Data**: Uses the included `sample_data.csv`
+- **Custom Upload**: Upload your own CSV file with network data
+
+### 3. Route Configuration
+- **Start Location**: Choose from available nodes (auto-detects farms)
+- **Destination**: Select target location (auto-detects markets)
+- **Speed Setting**: Adjust average travel speed for ETA calculation
+
+### 4. Map Features
+- **Interactive Markers**: Click on locations for details
+- **Route Highlighting**: Optimal path shown in red
+- **Multiple Themes**: Choose from 4 different map styles
+- **Zoom and Pan**: Full map navigation capabilities
+
+### 5. Results Analysis
+- **Distance Metrics**: Total distance and estimated travel time
+- **Step-by-Step Directions**: Detailed route breakdown
+- **Alternative Analysis**: Distances to all locations
+- **Export Options**: Download route data as CSV
+
 ## Customization
 
 ### Modify the Dataset
 
 1. **Edit `sample_data.csv`** to add/remove locations or change distances
-2. **Ensure connectivity**: Make sure there's a path from Farm to Market
+2. **Ensure connectivity**: Make sure there's a path from source to destination
 3. **Use realistic distances**: Keep weights positive and reasonable
 
-### Change Start/End Points
+### Change Default Locations
 
-Modify the `main()` function in `main.py`:
+**In `app.py`, modify the auto-detection logic:**
 ```python
-start_location = "YourStartLocation"
-end_location = "YourEndLocation"
+# Source selection
+default_source = next((node for node in nodes if 'your_term' in node.lower()), nodes[0])
+
+# Target selection  
+default_target = next((node for node in nodes if 'your_term' in node.lower()), nodes[-1])
 ```
 
-### Add Multiple Markets
+### Add Custom Map Themes
 
-You can extend the algorithm to find paths to multiple markets:
+**Extend the tile options in `create_folium_map()`:**
 ```python
-markets = ["Market1", "Market2", "Market3"]
-for market in markets:
-    path, distance = find_shortest_path(graph, "Farm", market)
-    print(f"Shortest path to {market}: {distance} km")
+tile_options = {
+    "OpenStreetMap": "OpenStreetMap",
+    "Your Custom Theme": "your_tile_url",
+    # ... existing themes
+}
 ```
 
 ## Technical Details
 
 ### Dependencies
 
+- **Streamlit**: Web application framework
 - **NetworkX**: Graph creation and algorithm implementation
-- **Matplotlib**: Graph visualization and plotting
+- **Folium**: Interactive map visualization
+- **streamlit-folium**: Streamlit-Folium integration
 - **Pandas**: CSV data loading and manipulation
 - **NumPy**: Numerical operations support
 
@@ -163,56 +188,61 @@ for market in markets:
 - **Time Complexity**: O((V + E) log V) where V is vertices and E is edges
 - **Space Complexity**: O(V) for storing distances and paths
 
-### Visualization Features
+### Map Visualization
 
-- **Color Coding**: 
-  - Green: Start location (Farm)
-  - Red: End location (Market)
-  - Orange: Shortest path nodes
-  - Blue: Other locations
-- **Edge Highlighting**: Shortest path edges shown in red
-- **Weight Labels**: All edge weights displayed
-- **Legend**: Clear explanation of colors and symbols
+- **Coordinate Generation**: Automatic coordinate assignment for node positioning
+- **Interactive Elements**: Clickable markers with popup information
+- **Route Highlighting**: Visual path differentiation with colors
+- **Responsive Design**: Adapts to different screen sizes
+
+## Screenshots
+
+*Note: Screenshots would be placed here showing:*
+- Main application interface
+- Interactive map with route highlighting
+- Sidebar configuration options
+- Results display with metrics
 
 ## Extensions
 
-### 1. Multiple Destination Optimization
-Find the shortest paths to multiple markets and choose the best one.
+### 1. Real-World Integration
+- **GPS Coordinates**: Use actual latitude/longitude data
+- **Road Network APIs**: Integrate with OpenStreetMap or Google Maps
+- **Traffic Data**: Include real-time traffic conditions
 
-### 2. Time-Based Routing
-Add time constraints or varying road conditions based on time of day.
+### 2. Advanced Features
+- **Multi-Objective Optimization**: Consider cost, time, and distance
+- **Vehicle Constraints**: Account for vehicle capacity and fuel efficiency
+- **Dynamic Routing**: Real-time route updates based on conditions
 
-### 3. Capacity Constraints
-Consider vehicle capacity and multiple trips.
-
-### 4. Real-World Integration
-Use actual GPS coordinates and road network data.
-
-### 5. Interactive Interface
-Create a web interface for dynamic route planning.
+### 3. Business Applications
+- **Fleet Management**: Optimize multiple vehicle routes
+- **Supply Chain**: Multi-depot and multi-destination routing
+- **Cost Analysis**: Include fuel costs and tolls in optimization
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"No path found"**: Ensure your graph is connected
-2. **"Node not found"**: Check spelling in start/end location names
+2. **"Node not found"**: Check spelling in location names
 3. **Import errors**: Run `pip install -r requirements.txt`
-4. **Empty visualization**: Check if matplotlib backend is properly configured
+4. **Streamlit won't start**: Check if port 8501 is available
+5. **Map not displaying**: Verify internet connection for map tiles
 
-### Debugging Tips
+### Performance Tips
 
-- Use `print(graph.nodes())` to see all available locations
-- Check `nx.is_connected(graph)` to verify graph connectivity
-- Validate CSV format and data types
+- **Large Networks**: Use data caching for better performance
+- **Slow Loading**: Reduce map complexity or use simpler themes
+- **Memory Issues**: Limit the number of nodes for complex visualizations
 
 ## Contributing
 
 Feel free to extend this project by:
 - Adding new optimization algorithms (A*, Bellman-Ford)
-- Implementing real-world constraints
-- Creating web interfaces
-- Adding more comprehensive testing
+- Implementing real-world constraints and data sources
+- Creating additional visualization options
+- Adding comprehensive testing suites
 
 ## License
 
@@ -220,4 +250,4 @@ This project is open source and available for educational and commercial use.
 
 ---
 
-**Created with ❤️ for demonstrating practical applications of graph algorithms in logistics and transportation optimization.**
+**🚀 Ready to optimize your routes?** Start with `streamlit run app.py` and explore the interactive farm-to-market route optimization system!
