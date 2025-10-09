@@ -1,0 +1,14 @@
+source,target,weight
+Farm,VillageA,4
+Farm,VillageB,2
+Farm,VillageC,7
+VillageA,VillageD,3
+VillageA,Market,8
+VillageB,VillageC,1
+VillageB,VillageE,5
+VillageC,VillageF,2
+VillageC,Market,6
+VillageD,Market,2
+VillageE,VillageF,3
+VillageE,Market,4
+VillageF,Market,1
