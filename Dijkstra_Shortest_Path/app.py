@@ -685,3 +685,142 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
+    #!/usr/bin/env python3
+"""
+Farm-to-Market Route Optimizer - Streamlit Web Application
+
+Extended with Weather-based Alternate Route Suggestion
+(Integrated by Ayushi)
+
+Author: Himadri & Ayushi
+Date: October 2025
+"""
+
+import streamlit as st
+import networkx as nx
+import pandas as pd
+import folium
+from streamlit_folium import st_folium
+import numpy as np
+import time
+
+# Import modules
+from validation import RouteDataValidator, display_validation_help_simple
+from reroute import get_weather_condition, detect_blocked_edges, compute_alternate_route
+
+
+# Streamlit Configuration
+st.set_page_config(
+    page_title="Farm-to-Market Route Optimizer",
+    page_icon="🌾",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+
+@st.cache_data
+def load_graph(df: pd.DataFrame) -> nx.Graph:
+    G = nx.Graph()
+    for _, row in df.iterrows():
+        G.add_edge(row["source"], row["target"], weight=float(row["weight"]))
+    return G
+
+
+def calculate_shortest_path(G, source, target):
+    try:
+        path = nx.shortest_path(G, source, target, weight="weight")
+        distance = nx.shortest_path_length(G, source, target, weight="weight")
+        return path, distance
+    except:
+        return [], float("inf")
+
+
+def generate_node_coordinates(nodes):
+    base_lat, base_lon = 26.0, 91.0  # Assam area
+    coordinates = {}
+    for i, node in enumerate(sorted(nodes)):
+        lat_offset = (i % 3 - 1) * 0.05 + np.random.uniform(-0.01, 0.01)
+        lon_offset = (i // 3 - 1) * 0.05 + np.random.uniform(-0.01, 0.01)
+        coordinates[node] = (base_lat + lat_offset, base_lon + lon_offset)
+    return coordinates
+
+
+def create_folium_map(G, path, source, target, blocked_edges=None):
+    coords = generate_node_coordinates(G.nodes())
+    m = folium.Map(location=[26.0, 91.0], zoom_start=8)
+
+    # Draw all edges
+    for u, v, data in G.edges(data=True):
+        color = "gray"
+        if blocked_edges and (u, v) in blocked_edges or (v, u) in blocked_edges:
+            color = "black"
+        folium.PolyLine(
+            [coords[u], coords[v]], color=color, weight=2, opacity=0.6
+        ).add_to(m)
+
+    # Draw main path
+    if len(path) > 1:
+        path_coords = [coords[n] for n in path]
+        folium.PolyLine(
+            path_coords, color="red", weight=5, opacity=0.8, popup="Active Route"
+        ).add_to(m)
+
+    # Add markers
+    for node in G.nodes():
+        color = "green" if node == source else "red" if node == target else "blue"
+        folium.Marker(coords[node], tooltip=node, icon=folium.Icon(color=color)).add_to(m)
+    return m
+
+
+# =========================
+# MAIN STREAMLIT APP LOGIC
+# =========================
+def main():
+    st.title("🚜 Farm-to-Market Route Optimizer")
+    st.write("Find optimal and weather-safe farm routes 🌦️")
+
+    df = pd.read_csv("sample_data.csv")
+    validator = RouteDataValidator()
+    if not validator.validate_data_only(df):
+        st.stop()
+
+    G = load_graph(df)
+    nodes = sorted(G.nodes())
+    source = st.sidebar.selectbox("Select Source", nodes)
+    target = st.sidebar.selectbox("Select Destination", nodes)
+
+    if st.sidebar.button("Calculate Shortest Path"):
+        path, distance = calculate_shortest_path(G, source, target)
+        if path:
+            st.success(f"✅ Shortest path found: {' → '.join(path)} ({distance} km)")
+            st_folium(create_folium_map(G, path, source, target), width=700, height=500)
+        else:
+            st.error("No path found between selected nodes.")
+
+    # ===============================
+    # 🌧️ WEATHER-BASED REROUTE SYSTEM
+    # ===============================
+    if st.sidebar.button("🌦️ Reroute Based on Weather"):
+        lat, lon = 26.0, 91.0  # Fixed for demo region (Assam)
+        condition = get_weather_condition(lat, lon)
+        st.info(f"Current weather: **{condition.capitalize()}**")
+
+        blocked_edges = detect_blocked_edges(G, condition)
+        if blocked_edges:
+            st.warning(f"⚠️ Blocked roads due to {condition}: {blocked_edges}")
+            alt_path, alt_distance = compute_alternate_route(G, source, target, blocked_edges)
+
+            if alt_path:
+                st.success(f"✅ Alternate Route: {' → '.join(alt_path)} ({alt_distance} km)")
+                st_folium(create_folium_map(G, alt_path, source, target, blocked_edges), width=700, height=500)
+            else:
+                st.error("❌ No alternate path available. Roads too affected.")
+        else:
+            st.success("✅ Weather is clear — no reroute needed!")
+
+
+if __name__ == "__main__":
+    main()
