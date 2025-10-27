@@ -1,27 +1,28 @@
 # ...existing code...
 #!/usr/bin/env python3
 """
-reroute.py — Weather-Based Rerouting Module for Farm2Road
+reroute.py — Weather-Based Rerouting Module (compatible with app.py)
 
-Features:
-- convert_path_to_edges: node path -> edge keys (A-B)
-- fetch_weather_for_edge: pluggable stub (simulate or replace with real API)
-- get_weather_affected_edges: returns edges with severity >= threshold
-- is_road_blocked_due_to_weather: quick membership check
-- calculate_alternate_route: Dijkstra avoiding blocked edges (adj-list input)
-- adjust_eta_for_weather: adjust ETA using severity scores
-- simulate_weather_blockages: demo random blocker generator
+Provides:
+- SIMULATED_BLOCKED_ROADS
+- convert_path_to_edges(node_path: List[str]) -> List[str]
+- get_weather_affected_edges(path_edges: List[str], severity_threshold=2) -> Dict[str, dict]
+- is_road_blocked_due_to_weather(path_edges, blocked_roads=None) -> bool
+- calculate_alternate_route(graph_adj_or_nx, source, target, blocked_roads) -> (path, distance)
+- adjust_eta_for_weather(distance_km, base_speed_kmh, severity_scores) -> (hrs, mins)
 """
 from typing import Dict, List, Tuple, Iterable, Union, Any
 import heapq
 import random
 import math
 
-# Demo simulated blocked roads. Keys are edge identifiers "A-B"
+# Simulated blocked roads (edge key -> reason)
 SIMULATED_BLOCKED_ROADS: Dict[str, str] = {
     "A-B": "Heavy Rain",
     "C-D": "Landslide",
-    "E-F": "Flood Alert",
+    # Add verbose names matching your sample_data.csv if desired:
+    "VillageA-VillageD": "Heavy Rain",
+    "VillageD-Market": "Rain",
 }
 
 # Severity mapping (higher = worse)
@@ -44,22 +45,28 @@ def convert_path_to_edges(node_path: List[str]) -> List[str]:
 
 def fetch_weather_for_edge(edge: str, use_simulation: bool = True) -> Tuple[str, int]:
     """
-    Fetch weather label and severity score for an edge.
-    Replace simulation with real API calls when coordinates and API key available.
+    Return (label, severity) for an edge string like "VillageA-VillageD".
+    Uses SIMULATED_BLOCKED_ROADS when use_simulation=True, otherwise returns random mild weather.
     """
     if use_simulation:
+        # direct match (exact)
         if edge in SIMULATED_BLOCKED_ROADS:
             label = SIMULATED_BLOCKED_ROADS[edge]
         else:
-            label = random.choices(
-                ["Clear", "Light Rain", "Rain", "Clear"],
-                weights=[0.82, 0.10, 0.04, 0.04],
-                k=1
-            )[0]
+            # also try reversed key
+            parts = edge.split('-')
+            if len(parts) == 2:
+                rev = f"{parts[1]}-{parts[0]}"
+                if rev in SIMULATED_BLOCKED_ROADS:
+                    label = SIMULATED_BLOCKED_ROADS[rev]
+                else:
+                    label = random.choices(["Clear", "Light Rain", "Rain", "Clear"],
+                                           weights=[0.82, 0.10, 0.04, 0.04], k=1)[0]
+            else:
+                label = "Clear"
     else:
         label = "Clear"
-    score = _SEVERITY_SCORE.get(label, 0)
-    return label, score
+    return label, _SEVERITY_SCORE.get(label, 0)
 
 
 def get_weather_affected_edges(
@@ -68,8 +75,8 @@ def get_weather_affected_edges(
     use_simulation: bool = True
 ) -> Dict[str, Dict[str, Any]]:
     """
-    Check edges in path_edges and return mapping edge -> {'label','severity'}
-    Only includes edges with severity >= severity_threshold.
+    Check each edge in path_edges and return mapping edge -> {'label','severity'}
+    Only edges with severity >= severity_threshold are included.
     """
     affected: Dict[str, Dict[str, Any]] = {}
     for edge in path_edges:
@@ -86,6 +93,7 @@ def is_road_blocked_due_to_weather(
     """
     Return True if any edge in path_edges is present in blocked_roads.
     If blocked_roads is None, uses SIMULATED_BLOCKED_ROADS.
+    Accepts blocked_roads as dict or iterable of keys.
     """
     if blocked_roads is None:
         blocked_keys = set(SIMULATED_BLOCKED_ROADS.keys())
@@ -95,55 +103,80 @@ def is_road_blocked_due_to_weather(
         blocked_keys = set(blocked_roads)
 
     for edge in path_edges:
+        # check forward or reverse ordering
         if edge in blocked_keys:
             return True
+        parts = edge.split('-')
+        if len(parts) == 2:
+            rev = f"{parts[1]}-{parts[0]}"
+            if rev in blocked_keys:
+                return True
     return False
 
 
 def calculate_alternate_route(
-    graph: Dict[str, List[Tuple[str, float]]],
+    graph: Union[Dict[str, List[Tuple[str, float]]], Any],
     source: str,
     target: str,
     blocked_roads: Union[Dict[str, str], Iterable[str]]
 ) -> Tuple[List[str], float]:
     """
-    Compute shortest path from source -> target on `graph` (adj-list) excluding blocked_roads.
-    Returns (path_list, total_distance). If none found returns ([], inf).
+    Compute shortest path from source -> target while excluding blocked_roads.
+    graph may be an adjacency dict {node: [(nbr, weight), ...]} (this is what app.py passes)
+    or a NetworkX Graph (function will detect adjacency).
+    blocked_roads: dict or iterable of edge keys like 'A-B'. Both directions treated blocked.
+    Returns: (path_list, total_distance) or ([], inf) if none found.
     """
+    # normalize blocked list
     if isinstance(blocked_roads, dict):
-        blocked_keys = set(blocked_roads.keys())
+        blocked_list = set(blocked_roads.keys())
     else:
-        blocked_keys = set(blocked_roads)
+        blocked_list = set(blocked_roads)
 
+    # If user passed a NetworkX Graph, convert to adj-list
+    try:
+        import networkx as nx  # type: ignore
+        if hasattr(graph, 'nodes') and hasattr(graph, 'neighbors'):
+            adj: Dict[str, List[Tuple[str, float]]] = {}
+            for u in graph.nodes():
+                adj[str(u)] = []
+                for v in graph.neighbors(u):
+                    weight = graph[u][v].get('weight', 1.0)
+                    adj[str(u)].append((str(v), float(weight)))
+        else:
+            adj = graph  # assume dict
+    except Exception:
+        adj = graph  # assume dict
+
+    # Build modified adjacency excluding blocked edges
     modified: Dict[str, List[Tuple[str, float]]] = {}
-    for node in graph:
+    for node in adj:
         modified[node] = []
-        for neighbor, w in graph.get(node, []):
+        for neighbor, w in adj.get(node, []):
             edge = f"{node}-{neighbor}"
             rev = f"{neighbor}-{node}"
-            if edge not in blocked_keys and rev not in blocked_keys:
-                try:
-                    weight = float(w)
-                except Exception:
-                    weight = 1.0
-                modified[node].append((neighbor, weight))
+            if edge in blocked_list or rev in blocked_list:
+                continue
+            try:
+                weight = float(w)
+            except Exception:
+                weight = 1.0
+            modified[node].append((neighbor, weight))
 
+    # Dijkstra
     pq: List[Tuple[float, str, List[str]]] = [(0.0, source, [])]
-    visited: Dict[str, float] = {}
+    best: Dict[str, float] = {}
 
     while pq:
         cost, node, path = heapq.heappop(pq)
-        if node in visited and cost >= visited[node] - 1e-9:
+        if node in best and cost >= best[node] - 1e-9:
             continue
-        visited[node] = cost
+        best[node] = cost
         new_path = path + [node]
-
         if node == target:
             return new_path, float(cost)
-
         for neigh, w in modified.get(node, []):
-            next_cost = cost + float(w)
-            heapq.heappush(pq, (next_cost, neigh, new_path))
+            heapq.heappush(pq, (cost + float(w), neigh, new_path))
 
     return [], float("inf")
 
@@ -153,17 +186,18 @@ def adjust_eta_for_weather(
     base_speed_kmh: float,
     severity_scores: Iterable[int]
 ) -> Tuple[int, int]:
-    """Adjust ETA using average severity; reduces effective speed per severity point."""
+    """
+    Adjust ETA (hours, minutes) for a route distance given base speed and list of severity scores.
+    Simple model: reduce speed by 5% per severity point, minimum 25% of base speed.
+    """
     if distance_km <= 0 or base_speed_kmh <= 0:
         return 0, 0
-
     scores = list(severity_scores)
     avg_sev = float(sum(scores) / len(scores)) if scores else 0.0
     multiplier = max(0.25, 1.0 - 0.05 * avg_sev)
     effective_speed = base_speed_kmh * multiplier
     if effective_speed <= 0:
-        effective_speed = max(0.1, base_speed_kmh * 0.25)
-
+        effective_speed = base_speed_kmh * 0.25
     total_hours = distance_km / effective_speed
     hrs = int(math.floor(total_hours))
     mins = int(round((total_hours - hrs) * 60))
@@ -171,38 +205,4 @@ def adjust_eta_for_weather(
         hrs += 1
         mins = 0
     return hrs, mins
-
-
-def simulate_weather_blockages(graph_edges: List[str], chance: float = 0.15) -> Dict[str, str]:
-    """Randomly mark some edges as blocked for demo/testing."""
-    blocked: Dict[str, str] = {}
-    choices = ["Light Rain", "Rain", "Heavy Rain", "Flood Alert", "Landslide"]
-    for e in graph_edges:
-        if random.random() < chance:
-            blocked[e] = random.choice(choices)
-    return blocked
-
-
-if __name__ == "__main__":
-    sample_graph = {
-        "A": [("B", 4), ("C", 2)],
-        "B": [("C", 1), ("D", 5)],
-        "C": [("D", 8)],
-        "D": []
-    }
-    source, target = "A", "D"
-    shortest_path = ["A", "B", "D"]
-    path_edges = convert_path_to_edges(shortest_path)
-    print("Original Path:", shortest_path)
-    affected = get_weather_affected_edges(path_edges, severity_threshold=2, use_simulation=True)
-    print("Weather-affected edges:", affected)
-    if affected:
-        alt_path, dist = calculate_alternate_route(sample_graph, source, target, affected.keys())
-        print("Alternate Path:", alt_path)
-        print("New Distance:", dist)
-        if dist < float("inf"):
-            hours, mins = adjust_eta_for_weather(dist, 40.0, [v["severity"] for v in affected.values()])
-            print(f"Adjusted ETA: {hours}h {mins}m")
-    else:
-        print("✅ All clear — current route safe.")
 # ...existing code...
