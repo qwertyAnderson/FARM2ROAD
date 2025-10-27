@@ -517,13 +517,16 @@ def main():
                 if affected:
                 # Show each blocked edge and its reason
                     blocked_msgs = [
-                        f"{edge} ({info['label']})"
+                        f"{edge} ({info.get('label', 'Unknown')})"
                         for edge, info in affected.items()
                     ]
+                    # Persist blocked messages so they remain after reruns
+                    st.session_state['blocked_msgs'] = blocked_msgs
+
                     st.warning(
                         f"⚠️ Blocked segments due to weather:\n\n- " +
                         "\n- ".join(blocked_msgs)
-                    )
+                    )   
     
 
                     adj = networkx_to_adj_list(G)
@@ -560,6 +563,21 @@ def main():
                         st.error("❌  No alternate path available at the moment.")
                 else:
                     st.success("✅  All roads are clear. Proceed with your current route.")
+
+
+
+
+        
+        if st.session_state.get('blocked_msgs'):
+            st.markdown("<hr>", unsafe_allow_html=True)
+            st.warning(
+                "⚠️ Blocked segments due to weather:\n\n- " +
+                "\n- ".join(st.session_state['blocked_msgs'])
+            )
+            if st.button("Clear blocked messages"):
+                st.session_state.pop('blocked_msgs', None)
+
+
 
         # Persistently show last computed alternate route (so it doesn't disappear after a rerun)
         if 'alternate_path' in st.session_state:
