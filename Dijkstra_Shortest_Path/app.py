@@ -470,6 +470,11 @@ def main():
                     folium_map = create_folium_map(G, [], source, target, map_theme)
                     st_folium(folium_map, width=700, height=500)
 
+
+
+
+       # ...existing code...
+
         # ☁️ Weather-based alternate route
         if st.sidebar.button("☁️  Reroute by Weather", type="secondary"):
             st.info("  Checking for weather-related blockages...")
@@ -501,16 +506,58 @@ def main():
                     if alternate_path and alt_distance != float('inf'):
                         severities = [v['severity'] for v in affected.values()]
                         adj_hours, adj_minutes = adjust_eta_for_weather(alt_distance, speed, severities)
+
+                        # Persist alternate result so it survives re-runs
+                        st.session_state['alternate_path'] = alternate_path
+                        st.session_state['alternate_distance'] = alt_distance
+                        st.session_state['alternate_severities'] = severities
+                        st.session_state['alternate_eta'] = (adj_hours, adj_minutes)
+                        st.session_state['alternate_source'] = current_source
+                        st.session_state['alternate_target'] = current_target
+                        st.session_state['alternate_map_theme'] = current_map_theme
+
                         st.success("✅  Alternate route found avoiding blocked roads!")
                         st.write(f"**New Route:** {' ➜ '.join(alternate_path)}")
                         st.write(f"**New Distance:** {alt_distance:.2f} km")
                         st.write(f"**Adjusted ETA:** {adj_hours}h {adj_minutes}m (based on weather)")
+
                         folium_map = create_folium_map(G, alternate_path, current_source, current_target, current_map_theme)
                         st_folium(folium_map, width=700, height=500)
+
                     else:
                         st.error("❌  No alternate path available at the moment.")
                 else:
                     st.success("✅  All roads are clear. Proceed with your current route.")
+
+        # Persistently show last computed alternate route (so it doesn't disappear after a rerun)
+        if 'alternate_path' in st.session_state:
+            try:
+                ap = st.session_state['alternate_path']
+                ad = st.session_state.get('alternate_distance', None)
+                aeta = st.session_state.get('alternate_eta', None)
+                a_src = st.session_state.get('alternate_source', source)
+                a_tgt = st.session_state.get('alternate_target', target)
+                a_theme = st.session_state.get('alternate_map_theme', map_theme)
+
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.subheader("  Last Alternate Route (persisted)")
+                st.write(f"**Route:** {' ➜ '.join(ap)}")
+                if ad is not None:
+                    st.write(f"**Distance:** {ad:.2f} km")
+                if aeta:
+                    st.write(f"**Adjusted ETA:** {aeta[0]}h {aeta[1]}m")
+
+                folium_map = create_folium_map(G, ap, a_src, a_tgt, a_theme)
+                st_folium(folium_map, width=700, height=500)
+            except Exception:
+                # don't break the app on unexpected session state contents
+                pass
+
+
+
+
+
+
 
     else:
         st.error("  **No valid data loaded**")
