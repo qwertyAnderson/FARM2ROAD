@@ -663,47 +663,40 @@ def main():
         
 
 
-            # Import reroute module
-from reroute import get_weather_affected_edges, find_alternate_route, create_weather_reroute_map
 
-# Add weather reroute option
-if st.sidebar.button("☁️ Reroute by Weather", type="secondary"):
-    if not source or not target:
-        st.sidebar.warning("Please select both source and destination first.")
-    else:
-        st.info("Fetching weather data and checking for blocked roads...")
+        # Import reroute module 
+        from reroute import get_weather_affected_edges, find_alternate_route, create_weather_reroute_map
 
-        # Simulate weather-affected roads
-        blocked_edges = get_weather_affected_edges(G, severity_level=2)
+        # Add weather reroute option
+        if st.sidebar.button("☁️ Reroute by Weather", type="secondary"):
+            if not source or not target:
+                st.sidebar.warning("Please select both source and destination first.")
+            else:
+                st.info("Fetching weather data and checking for blocked roads...")
 
-        if blocked_edges:
-            st.warning(f"⚠️ {len(blocked_edges)} routes are affected by bad weather.")
-            alt_path, alt_distance = find_alternate_route(G, source, target, blocked_edges)
+                # Simulate weather-affected roads
+                blocked_edges = get_weather_affected_edges(G, severity_level=2)
 
-            if alt_path and alt_distance != float('inf'):
-                st.success("✅ Alternate Route Found! Avoiding blocked roads.")
+                if blocked_edges:
+                    st.warning(f"⚠️ {len(blocked_edges)} routes are affected by bad weather.")
+                    alt_path, alt_distance = find_alternate_route(G, source, target, blocked_edges)
+
+                    if alt_path and alt_distance != float('inf'):
+                        st.success("✅ Alternate Route Found! Avoiding blocked roads.")
 
                 # Create map showing both routes
-                folium_map = create_weather_reroute_map(
-                    G, [], alt_path, blocked_edges, source, target, map_theme
-                )
+                        folium_map = create_weather_reroute_map(
+                            G, [], alt_path, blocked_edges, source, target, map_theme
+                        )
 
-                from streamlit_folium import st_folium
-                st_folium(folium_map, width=700, height=500)
+                        from streamlit_folium import st_folium
+                        st_folium(folium_map, width=700, height=500)
 
-                st.markdown(f"""
-                **Alternate Route:** {' ➜ '.join(alt_path)}  
-                **New Distance:** {alt_distance:.1f} km
-                """)
-            else:
-                st.error("No alternate route available avoiding weather-affected roads.")
-        else:
-            st.success("✅ All routes are clear — no weather-related blockages detected.")
-
-
-
-
-
+                        st.markdown(f"""**Alternate Route:** {' ➜ '.join(alt_path)}  **New Distance:** {alt_distance:.1f} km""")
+                    else:
+                        st.error("No alternate route available avoiding weather-affected roads.")
+                else:
+                    st.success("✅ All routes are clear — no weather-related blockages detected.")
 
 
 
