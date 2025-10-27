@@ -661,6 +661,54 @@ def main():
                     folium_map = create_folium_map(G, [], source, target, map_theme)
                     st_folium(folium_map, width=700, height=500)
         
+
+
+            # Import reroute module
+from reroute import get_weather_affected_edges, find_alternate_route, create_weather_reroute_map
+
+# Add weather reroute option
+if st.sidebar.button("☁️ Reroute by Weather", type="secondary"):
+    if not source or not target:
+        st.sidebar.warning("Please select both source and destination first.")
+    else:
+        st.info("Fetching weather data and checking for blocked roads...")
+
+        # Simulate weather-affected roads
+        blocked_edges = get_weather_affected_edges(G, severity_level=2)
+
+        if blocked_edges:
+            st.warning(f"⚠️ {len(blocked_edges)} routes are affected by bad weather.")
+            alt_path, alt_distance = find_alternate_route(G, source, target, blocked_edges)
+
+            if alt_path and alt_distance != float('inf'):
+                st.success("✅ Alternate Route Found! Avoiding blocked roads.")
+
+                # Create map showing both routes
+                folium_map = create_weather_reroute_map(
+                    G, [], alt_path, blocked_edges, source, target, map_theme
+                )
+
+                from streamlit_folium import st_folium
+                st_folium(folium_map, width=700, height=500)
+
+                st.markdown(f"""
+                **Alternate Route:** {' ➜ '.join(alt_path)}  
+                **New Distance:** {alt_distance:.1f} km
+                """)
+            else:
+                st.error("No alternate route available avoiding weather-affected roads.")
+        else:
+            st.success("✅ All routes are clear — no weather-related blockages detected.")
+
+
+
+
+
+
+
+
+
+
         else:
             st.error("  **Graph Construction Failed**")
             st.write("Could not create a valid network graph from the provided data.")
@@ -687,151 +735,3 @@ if __name__ == "__main__":
     main()
 
 
-
-
-#!/usr/bin/env python3
-"""
-Farm-to-Market Route Optimizer - Streamlit Web Application
-Enhanced with Ayushi's Weather-Based Alternate Route Feature
-"""
-
-import streamlit as st
-import networkx as nx
-import pandas as pd
-import folium
-from streamlit_folium import st_folium
-import numpy as np
-import time
-from typing import List, Tuple, Dict, Optional
-import io
-from validation import RouteDataValidator, display_validation_help, display_validation_help_simple
-
-# Page setup
-st.set_page_config(page_title="Farm-to-Market Route Optimizer", layout="wide")
-
-# ----------------- FUNCTIONS FROM HIMADRI'S CODE -----------------
-def load_graph(df: pd.DataFrame) -> nx.Graph:
-    G = nx.Graph()
-    for _, row in df.iterrows():
-        if not pd.isna(row["source"]) and not pd.isna(row["target"]) and not pd.isna(row["weight"]):
-            G.add_edge(str(row["source"]).strip(), str(row["target"]).strip(), weight=float(row["weight"]))
-    return G
-
-
-def calculate_shortest_path(G, source, target):
-    try:
-        path = nx.dijkstra_path(G, source, target, weight="weight")
-        distance = nx.dijkstra_path_length(G, source, target, weight="weight")
-        return path, distance
-    except:
-        return [], float("inf")
-
-
-def calculate_eta(distance, speed):
-    if distance == 0 or speed <= 0:
-        return 0, 0
-    total_hours = distance / speed
-    return int(total_hours), int((total_hours - int(total_hours)) * 60)
-
-
-def generate_node_coordinates(nodes):
-    base_lat, base_lon = 40.7128, -74.0060
-    coords = {}
-    for i, node in enumerate(sorted(nodes)):
-        lat_offset = (i % 3 - 1) * 0.02 + np.random.uniform(-0.005, 0.005)
-        lon_offset = (i // 3 - 1) * 0.02 + np.random.uniform(-0.005, 0.005)
-        coords[node] = (base_lat + lat_offset, base_lon + lon_offset)
-    return coords
-
-
-def create_folium_map(G, path, source, target, theme="OpenStreetMap"):
-    coords = generate_node_coordinates(list(G.nodes()))
-    m = folium.Map(location=[40.7128, -74.0060], zoom_start=12, tiles=theme)
-    for edge in G.edges(data=True):
-        u, v = edge[0], edge[1]
-        folium.PolyLine([coords[u], coords[v]], color="lightgray", weight=2).add_to(m)
-    if len(path) > 1:
-        folium.PolyLine([coords[n] for n in path], color="red", weight=5, opacity=0.8).add_to(m)
-    for n in G.nodes():
-        lat, lon = coords[n]
-        if n == source:
-            color, icon = "green", "play"
-        elif n == target:
-            color, icon = "red", "stop"
-        elif n in path:
-            color, icon = "orange", "info-sign"
-        else:
-            color, icon = "lightblue", "info-sign"
-        folium.Marker(location=[lat, lon], icon=folium.Icon(color=color, icon=icon), tooltip=n).add_to(m)
-    return m
-# ------------------------------------------------------------------
-
-
-def main():
-    st.title("🌾 Farm-to-Market Route Optimizer")
-    st.write("Find the optimal route from farm to market using Dijkstra's Algorithm")
-
-    validator = RouteDataValidator()
-
-    # Load sample CSV
-    df = pd.read_csv("sample_data.csv")
-    G = load_graph(df)
-
-    nodes = sorted(list(G.nodes()))
-    source = st.sidebar.selectbox("Select Source", nodes, index=0)
-    target = st.sidebar.selectbox("Select Destination", nodes, index=len(nodes)-1)
-    speed = st.sidebar.slider("Average Speed (km/h)", 10, 100, 40)
-    map_theme = st.sidebar.selectbox("Map Theme", ["OpenStreetMap", "Stamen Terrain", "CartoDB Positron", "CartoDB Dark"])
-
-    if st.sidebar.button("Calculate Optimal Route"):
-        path, distance = calculate_shortest_path(G, source, target)
-        if not path:
-            st.error("No path found between selected locations.")
-        else:
-            st.success("Optimal route found successfully!")
-            hours, mins = calculate_eta(distance, speed)
-            st.metric("Total Distance", f"{distance:.2f} km")
-            st.metric("Estimated Time", f"{hours}h {mins}m")
-            st.write("Optimal Path:", " → ".join(path))
-            st.subheader("🗺️ Route Map")
-            st_folium(create_folium_map(G, path, source, target, map_theme), width=700, height=500)
-
-    # ---- AYUSHI'S WEATHER-BASED REROUTE FEATURE ----
-    from reroute import find_alternate_route
-
-    if st.sidebar.button("☁️ Find Alternate Route (Weather Aware)"):
-        st.info("Simulating weather and finding safe alternate route...")
-        alt_path, alt_distance, blocked_edges = find_alternate_route(G, source, target)
-
-        if not alt_path:
-            st.error("⚠️ No alternate route found due to severe weather.")
-            if blocked_edges:
-                st.write("Blocked routes:", blocked_edges)
-        else:
-            st.success("✅ Alternate weather-safe route found!")
-            st.metric("Alternate Distance", f"{alt_distance:.2f} km")
-            st.write("Blocked Routes:", blocked_edges)
-            st.write("Alternate Path:", " → ".join(alt_path))
-
-            # Create map with alternate route (blue)
-            coords = generate_node_coordinates(list(G.nodes()))
-            alt_map = create_folium_map(G, [], source, target, map_theme)
-
-            # Add blocked roads in red
-            for (u, v) in blocked_edges:
-                if u in coords and v in coords:
-                    folium.PolyLine([coords[u], coords[v]], color="red", weight=4, opacity=0.8,
-                                    popup=f"Blocked: {u}-{v}").add_to(alt_map)
-
-            # Add alternate path in blue
-            if len(alt_path) > 1:
-                folium.PolyLine([coords[n] for n in alt_path], color="blue", weight=5,
-                                opacity=0.8, popup="Alternate Route").add_to(alt_map)
-
-            st.subheader("🗺️ Weather-Aware Alternate Route Map")
-            st_folium(alt_map, width=700, height=500)
-    # -------------------------------------------------
-
-
-if __name__ == "__main__":
-    main()
