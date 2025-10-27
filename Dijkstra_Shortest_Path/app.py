@@ -26,6 +26,7 @@ import numpy as np
 import time
 from typing import List, Tuple, Dict, Optional
 import io
+import hashlib
 
 # Import validation module
 from validation import RouteDataValidator, validate_route_data, display_validation_help, display_validation_help_simple
@@ -139,17 +140,39 @@ def calculate_eta(distance: float, speed: float) -> Tuple[int, int]:
     return hours, minutes
 
 
+@st.cache_data
 def generate_node_coordinates(nodes: List[str]) -> Dict[str, Tuple[float, float]]:
-    base_lat, base_lon = 40.7128, -74.0060
+    """
+    Generate deterministic coordinates for nodes using hash-based offsets.
+    Cached to keep coordinates stable across Streamlit reruns.
+    """
+    base_lat, base_lon = 40.7128, -74.0060  # NYC center
     coordinates = {}
+    
+    # Sort nodes for consistent ordering
     for i, node in enumerate(sorted(nodes)):
-        lat_offset = (i % 3 - 1) * 0.02 + np.random.uniform(-0.005, 0.005)
-        lon_offset = (i // 3 - 1) * 0.02 + np.random.uniform(-0.005, 0.005)
+        # Use node name hash for stable random-like offsets
+        node_hash = int(hashlib.md5(node.encode()).hexdigest(), 16)
+        
+        # Deterministic offsets based on hash
+        lat_offset = ((node_hash & 0xFFF) / 0xFFF - 0.5) * 0.02
+        lon_offset = ((node_hash >> 12 & 0xFFF) / 0xFFF - 0.5) * 0.02
+        
+        # Grid placement plus hash-based offset
+        grid_lat = (i % 3 - 1) * 0.02
+        grid_lon = (i // 3 - 1) * 0.02
+        
+        final_lat = grid_lat + lat_offset
+        final_lon = grid_lon + lon_offset
+        
+        # Semantic adjustments
         if 'farm' in node.lower():
-            lat_offset -= 0.01
+            final_lat -= 0.01
         elif 'market' in node.lower():
-            lat_offset += 0.01
-        coordinates[node] = (base_lat + lat_offset, base_lon + lon_offset)
+            final_lat += 0.01
+            
+        coordinates[node] = (base_lat + final_lat, base_lon + final_lon)
+    
     return coordinates
 
 
