@@ -515,7 +515,16 @@ def main():
                 affected = get_weather_affected_edges(path_edges, severity_threshold=2, use_simulation=True)
 
                 if affected:
-                    st.warning(f"⚠️ Weather affects {len(affected)} edges: {', '.join(affected.keys())}")
+                # Show each blocked edge and its reason
+                    blocked_msgs = [
+                        f"{edge} ({info['label']})"
+                        for edge, info in affected.items()
+                    ]
+                    st.warning(
+                        f"⚠️ Blocked segments due to weather:\n\n- " +
+                        "\n- ".join(blocked_msgs)
+                    )
+    
 
                     adj = networkx_to_adj_list(G)
 
