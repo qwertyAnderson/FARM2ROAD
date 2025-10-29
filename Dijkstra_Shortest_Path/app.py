@@ -27,6 +27,7 @@ import time
 from typing import List, Tuple, Dict, Optional
 import io
 import hashlib
+from cost_estimation import calculate_cost
 
 # Import validation module
 from validation import RouteDataValidator, validate_route_data, display_validation_help, display_validation_help_simple
@@ -614,6 +615,25 @@ def main():
         st.info("  Please check the data source and try again.")
         st.subheader("  Expected Data Format")
         display_validation_help()
+
+    # 💰 Cost Estimation Section
+    st.markdown("---")
+    st.subheader("💰 Cost Estimation")
+
+    with st.expander("Estimate Delivery Cost"):
+        st.write("Compare solo and pooled delivery costs based on route distance.")
+        
+        base_rate = st.number_input("Enter base rate (₹ per km):", min_value=1, value=10)
+        num_farmers = st.number_input("Number of farmers sharing vehicle:", min_value=1, value=1)
+        
+        if st.button("Calculate Delivery Cost"):
+            solo_cost, pooled_cost = calculate_cost(distance, base_rate, num_farmers)
+            st.success("✅ Cost estimation complete!")
+            st.write(f"**Distance:** {distance:.2f} km")
+            st.write(f"**Base Rate:** ₹{base_rate}/km")
+            st.write(f"**Solo Delivery Cost:** ₹{solo_cost:.2f}")
+            st.write(f"**Pooled Delivery Cost (per farmer):** ₹{pooled_cost:.2f}")
+            st.write(f"**Savings per farmer:** ₹{solo_cost - pooled_cost:.2f}")
 
 
 if __name__ == "__main__":
