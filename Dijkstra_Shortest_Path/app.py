@@ -616,30 +616,36 @@ def main():
         st.subheader("  Expected Data Format")
         display_validation_help()
 
-   # 💰 Cost Estimation Section
+   # -------------------------------------------------------------------------
+# 💰 COST ESTIMATION 
+# -------------------------------------------------------------------------
 st.markdown("---")
 st.subheader("💰 Cost Estimation")
 
 with st.expander("Estimate Delivery Cost"):
     st.write("Compare solo and pooled delivery costs based on route distance.")
-    
-    base_rate = st.number_input("Enter base rate (₹ per km):", min_value=1, value=10)
+
+    base_rate = st.number_input("Enter base rate (₹ per km):", min_value=1.0, value=10.0, format="%.2f")
     num_farmers = st.number_input("Number of farmers sharing vehicle:", min_value=1, value=1)
-    
+
     if st.button("Calculate Delivery Cost"):
-        # ✅ Step 4 fix: ensure distance is defined
-        if 'distance' not in st.session_state:
-            st.warning("Please calculate a route first before estimating cost.")
-        else:
-            distance = st.session_state['distance']
+        # ✅ Look for distance from session
+        distance = st.session_state.get("distance") or st.session_state.get("alternate_distance")
+
+        if not distance:
+            st.warning("⚠️ Please calculate a route first before estimating cost.")
+            st.stop()
+
+        try:
             solo_cost, pooled_cost = calculate_cost(distance, base_rate, num_farmers)
             st.success("✅ Cost estimation complete!")
-            st.write(f"**Distance:** {distance:.2f} km")
-            st.write(f"**Base Rate:** ₹{base_rate}/km")
+            st.write(f"**Distance used:** {distance:.2f} km")
+            st.write(f"**Base Rate:** ₹{base_rate:.2f}/km")
             st.write(f"**Solo Delivery Cost:** ₹{solo_cost:.2f}")
             st.write(f"**Pooled Delivery Cost (per farmer):** ₹{pooled_cost:.2f}")
-            st.write(f"**Savings per farmer:** ₹{solo_cost - pooled_cost:.2f}")
- 
+            st.write(f"**Savings per farmer:** ₹{(solo_cost - pooled_cost):.2f}")
+        except Exception as e:
+            st.error(f"❌ Could not calculate cost: {e}")
 
 
 import pandas as pd
@@ -822,6 +828,10 @@ elif section == "Route Optimization":
             try:
                 path = nx.dijkstra_path(G, source, target, weight='weight')
                 distance = nx.dijkstra_path_length(G, source, target, weight='weight')
+
+               # ✅ Save distance for Cost Estimation
+                st.session_state['distance'] = distance
+
                 st.success(f"Shortest Path: {' ➜ '.join(path)}")
                 st.info(f"Total Distance: {round(distance, 2)} km")
 
@@ -830,6 +840,23 @@ elif section == "Route Optimization":
             except Exception as e:
                 st.error(f"Error: {e}")
 
+# ---------------------------
+# ✅ Cost calculation helper (ADD THIS)
+# ---------------------------
+def calculate_cost(distance_km: float, base_rate_per_km: float, num_farmers: int):
+    """
+    Simple cost estimator:
+      - Solo cost = fixed + distance * base_rate
+      - Pooled cost = (fixed + distance * base_rate) / num_farmers
+    """
+    if distance_km is None or distance_km <= 0:
+        raise ValueError("Invalid distance for cost calculation")
+
+    fixed_cost = 50.0  # base booking / handling fee
+    variable = distance_km * base_rate_per_km
+    solo_cost = fixed_cost + variable
+    pooled_cost_per_farmer = solo_cost / max(1, num_farmers)
+    return solo_cost, pooled_cost_per_farmer
 
 
 if __name__ == "__main__":
