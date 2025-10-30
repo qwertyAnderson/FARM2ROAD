@@ -499,8 +499,10 @@ def main():
 
        # ...existing code...
 
-        # ☁️ Weather-based alternate route
+               # ☁️ Weather-based alternate route
         if st.sidebar.button("☁️  Reroute by Weather", type="secondary"):
+
+
             st.info("  Checking for weather-related blockages...")
             if 'shortest_path' not in st.session_state:
                 st.warning("Please calculate a route first (press 'Calculate Optimal Route').")
@@ -616,17 +618,22 @@ def main():
         st.subheader("  Expected Data Format")
         display_validation_help()
 
-    # 💰 Cost Estimation Section
-    st.markdown("---")
-    st.subheader("💰 Cost Estimation")
+   # 💰 Cost Estimation Section
+st.markdown("---")
+st.subheader("💰 Cost Estimation")
 
-    with st.expander("Estimate Delivery Cost"):
-        st.write("Compare solo and pooled delivery costs based on route distance.")
-        
-        base_rate = st.number_input("Enter base rate (₹ per km):", min_value=1, value=10)
-        num_farmers = st.number_input("Number of farmers sharing vehicle:", min_value=1, value=1)
-        
-        if st.button("Calculate Delivery Cost"):
+with st.expander("Estimate Delivery Cost"):
+    st.write("Compare solo and pooled delivery costs based on route distance.")
+    
+    base_rate = st.number_input("Enter base rate (₹ per km):", min_value=1, value=10)
+    num_farmers = st.number_input("Number of farmers sharing vehicle:", min_value=1, value=1)
+    
+    if st.button("Calculate Delivery Cost"):
+        # ✅ Step 4 fix: ensure distance is defined
+        if 'distance' not in st.session_state:
+            st.warning("Please calculate a route first before estimating cost.")
+        else:
+            distance = st.session_state['distance']
             solo_cost, pooled_cost = calculate_cost(distance, base_rate, num_farmers)
             st.success("✅ Cost estimation complete!")
             st.write(f"**Distance:** {distance:.2f} km")
@@ -636,6 +643,7 @@ def main():
             st.write(f"**Savings per farmer:** ₹{solo_cost - pooled_cost:.2f}")
 
 
+
 if __name__ == "__main__":
     main()
-# ...existing code...
+# ...existing code... 
