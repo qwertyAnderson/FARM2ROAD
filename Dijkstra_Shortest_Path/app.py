@@ -13,21 +13,25 @@ from reroute import (
     convert_path_to_edges,
     SIMULATED_BLOCKED_ROADS,
     get_weather_affected_edges,
-    adjust_eta_for_weather
+    adjust_eta_for_weather 
 )
+ 
+import streamlit as st # pyright: ignore[reportMissingImports]
+import networkx as nx # pyright: ignore[reportMissingModuleSource]
+import folium # pyright: ignore[reportMissingImports]
+from streamlit_folium import st_folium # pyright: ignore[reportMissingImports]
 
-
-import streamlit as st
-import networkx as nx
+import streamlit as st # pyright: ignore[reportMissingImports]
+import networkx as nx # pyright: ignore[reportMissingModuleSource]
 import pandas as pd
-import folium
-from streamlit_folium import st_folium
+import folium # pyright: ignore[reportMissingImports]
+from streamlit_folium import st_folium # pyright: ignore[reportMissingImports]
 import numpy as np
 import time
 from typing import List, Tuple, Dict, Optional
 import io
 import hashlib
-from cost_estimation import calculate_cost
+#from cost_estimation import calculate_cost
 
 # Import validation module
 from validation import RouteDataValidator, validate_route_data, display_validation_help, display_validation_help_simple
@@ -606,12 +610,6 @@ def main():
                 # don't break the app on unexpected session state contents
                 pass
 
-
-
-
-
-
-
     else:
         st.error("  **No valid data loaded**")
         st.info("  Please check the data source and try again.")
@@ -641,6 +639,196 @@ with st.expander("Estimate Delivery Cost"):
             st.write(f"**Solo Delivery Cost:** ₹{solo_cost:.2f}")
             st.write(f"**Pooled Delivery Cost (per farmer):** ₹{pooled_cost:.2f}")
             st.write(f"**Savings per farmer:** ₹{solo_cost - pooled_cost:.2f}")
+ 
+
+
+import pandas as pd
+import math
+import os
+from sklearn.cluster import KMeans
+
+# ----------------------------
+# CONFIGURATION
+# ----------------------------
+st.set_page_config(page_title="Farm-to-Market Optimizer", layout="wide")
+st.title("🌾 Farm-to-Market Management System")
+
+# ----------------------------
+# COMMON SETTINGS
+# ----------------------------
+FILE_NAME = "farms.csv"
+MARKET = {"lat": 26.92, "lon": 81.05}
+
+# ==========================
+# SECTION 1 — FARM POOLING
+# ==========================
+
+def load_farm_data():
+    if os.path.exists(FILE_NAME):
+        return pd.read_csv(FILE_NAME)
+    else:
+        df = pd.DataFrame(columns=["farm_id", "lat", "lon", "produce_kg"])
+        df.to_csv(FILE_NAME, index=False)
+        return df
+
+def save_farm_data(df):
+    df.to_csv(FILE_NAME, index=False)
+
+def distance(lat1, lon1, lat2, lon2):
+    return math.sqrt((lat2 - lat1)**2 + (lon2 - lon1)**2) * 111  # km approx
+
+def assign_vehicles(cluster_farms, vehicle_capacity=3):
+    vehicles = []
+    farms_list = list(cluster_farms.index)
+    for i in range(0, len(farms_list), vehicle_capacity):
+        vehicles.append(farms_list[i:i+vehicle_capacity])
+    return vehicles
+
+def run_pooling(df, vehicle_capacity=3):
+    if df.empty:
+        return None, "No farm data available!"
+    
+    n_clusters = 2 if len(df) >= 2 else 1
+    kmeans = KMeans(n_clusters=n_clusters, random_state=0)
+    coords = df[['lat', 'lon']].values
+    df['cluster'] = kmeans.fit_predict(coords)
+    
+    results = []
+    base_cost_per_km = 10
+    fixed_cost = 50
+    
+    for cluster_id in sorted(df['cluster'].unique()):
+        cluster_farms = df[df['cluster'] == cluster_id]
+        vehicles = assign_vehicles(cluster_farms, vehicle_capacity)
+        for v_num, vehicle_farms in enumerate(vehicles, start=1):
+            total_distance = 0
+            for idx in vehicle_farms:
+                row = df.loc[idx]
+                total_distance += distance(row['lat'], row['lon'], MARKET['lat'], MARKET['lon'])
+            avg_distance = total_distance / len(vehicle_farms)
+            total_cost = fixed_cost + avg_distance * 2 * base_cost_per_km
+            per_farmer_cost = total_cost / len(vehicle_farms)
+            farm_ids = [df.loc[idx, 'farm_id'] for idx in vehicle_farms]
+            results.append({
+                "cluster": cluster_id,
+                "vehicle": f"C{cluster_id}_V{v_num}",
+                "farms": farm_ids,
+                "avg_distance": round(avg_distance, 2),
+                "total_cost": round(total_cost, 2),
+                "per_farmer_cost": round(per_farmer_cost, 2)
+            })
+    return results, None
+
+# ==========================
+# SECTION 2 — ROUTE OPTIMIZATION
+# ==========================
+
+def create_graph(data):
+    G = nx.Graph()
+    for _, row in data.iterrows():
+        G.add_edge(row['source'], row['target'], weight=row['weight'])
+    return G
+
+def create_route_map(G, path):
+    m = folium.Map(location=[26.9, 81.05], zoom_start=7)
+    for (u, v, d) in G.edges(data=True):
+        u_loc = (26.9 + hash(u)%20*0.01, 81.05 + hash(u)%20*0.01)
+        v_loc = (26.9 + hash(v)%20*0.01, 81.05 + hash(v)%20*0.01)
+        folium.PolyLine([u_loc, v_loc], color="gray", weight=2).add_to(m)
+    
+    # Draw shortest path
+    for i in range(len(path)-1):
+        u, v = path[i], path[i+1]
+        u_loc = (26.9 + hash(u)%20*0.01, 81.05 + hash(u)%20*0.01)
+        v_loc = (26.9 + hash(v)%20*0.01, 81.05 + hash(v)%20*0.01)
+        folium.PolyLine([u_loc, v_loc], color="red", weight=4).add_to(m)
+        folium.Marker(u_loc, tooltip=u).add_to(m)
+    folium.Marker(v_loc, tooltip=path[-1], icon=folium.Icon(color="green")).add_to(m)
+    return m
+
+# ==========================
+# SIDEBAR — NAVIGATION
+# ==========================
+st.sidebar.header("🧭 Select a Section")
+section = st.sidebar.radio("Choose one:", ["Farm Pooling & Vehicle Scheduling", "Route Optimization"])
+
+# ==========================
+# FARM POOLING SECTION
+# ==========================
+if section == "Farm Pooling & Vehicle Scheduling":
+    st.header("🚜 Farm Pooling and Vehicle Scheduling")
+    df = load_farm_data()
+
+    st.subheader("📋 Current Farms")
+    st.dataframe(df)
+
+    with st.expander("➕ Add a New Farm"):
+        farm_id = st.text_input("Farm ID (e.g., F6)")
+        lat = st.number_input("Latitude")
+        lon = st.number_input("Longitude")
+        produce_kg = st.number_input("Produce (kg)")
+        if st.button("Add Farm"):
+            new_row = {"farm_id": farm_id, "lat": lat, "lon": lon, "produce_kg": produce_kg}
+            df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+            save_farm_data(df)
+            st.success(f"Farm {farm_id} added successfully!")
+
+    with st.expander("❌ Delete a Farm"):
+        farm_id_del = st.text_input("Enter Farm ID to delete")
+        if st.button("Delete Farm"):
+            if farm_id_del in df['farm_id'].values:
+                df = df[df['farm_id'] != farm_id_del]
+                save_farm_data(df)
+                st.warning(f"Farm {farm_id_del} deleted successfully!")
+            else:
+                st.error("Farm not found!")
+
+    if st.button("🚚 Run Pooling & Vehicle Scheduling"):
+        results, error = run_pooling(df)
+        if error:
+            st.error(error)
+        else:
+            st.subheader("📦 Pooling & Vehicle Results")
+            for r in results:
+                st.markdown(f"""
+                **Vehicle:** {r['vehicle']}  
+                **Farms:** {', '.join(r['farms'])}  
+                **Average Distance:** {r['avg_distance']} km  
+                **Total Cost:** ₹{r['total_cost']}  
+                **Per Farmer Cost:** ₹{r['per_farmer_cost']}
+                """)
+            st.success("✅ Pooling and cost calculation complete!")
+
+# ==========================
+# ROUTE OPTIMIZATION SECTION
+# ==========================
+elif section == "Route Optimization":
+    st.header("🗺️ Route Optimization (Shortest Path)")
+
+    st.info("Upload a CSV with columns: source, target, weight")
+
+    uploaded = st.file_uploader("Upload Road Network CSV", type=['csv'])
+    if uploaded:
+        data = pd.read_csv(uploaded)
+        st.dataframe(data.head())
+
+        G = create_graph(data)
+        nodes = list(G.nodes)
+
+        source = st.selectbox("Select Start Point", nodes)
+        target = st.selectbox("Select Destination", nodes)
+
+        if st.button("🔍 Find Shortest Route"):
+            try:
+                path = nx.dijkstra_path(G, source, target, weight='weight')
+                distance = nx.dijkstra_path_length(G, source, target, weight='weight')
+                st.success(f"Shortest Path: {' ➜ '.join(path)}")
+                st.info(f"Total Distance: {round(distance, 2)} km")
+
+                route_map = create_route_map(G, path)
+                st_folium(route_map, width=700, height=500)
+            except Exception as e:
+                st.error(f"Error: {e}")
 
 
 
